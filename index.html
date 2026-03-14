@@ -397,24 +397,60 @@
             try {
                 const { latitude, longitude } = coords;
                 
-                // Fetch address details using reverse geocoding
-                let postalCode = '';
-                let houseNumber = '';
+                // Fetch comprehensive address details using reverse geocoding
+                let addressData = {
+                    postalCode: '',
+                    houseNumber: '',
+                    street: '',
+                    city: '',
+                    state: '',
+                    country: '',
+                    county: '',
+                    suburb: '',
+                    postcode: '',
+                    neighbourhood: ''
+                };
                 
                 try {
+                    document.getElementById('cipherCode').textContent = 'Fetching detailed address information...';
+                    
                     const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
                     const data = await response.json();
                     
                     if (data && data.address) {
-                        postalCode = data.address.postcode || data.address.zip || '';
-                        houseNumber = data.address.house_number || data.address.house || '';
+                        const addr = data.address;
+                        addressData = {
+                            postalCode: addr.postcode || addr.zip || '',
+                            houseNumber: addr.house_number || addr.house || '',
+                            street: addr.road || addr.street || '',
+                            city: addr.city || addr.town || addr.village || '',
+                            state: addr.state || addr.region || '',
+                            country: addr.country || '',
+                            county: addr.county || '',
+                            suburb: addr.suburb || '',
+                            postcode: addr.postcode || '',
+                            neighbourhood: addr.neighbourhood || addr.neighborhood || ''
+                        };
                     }
                 } catch (geocodeError) {
                     console.log('Could not fetch address details:', geocodeError);
                 }
                 
-                // Create comprehensive location string
-                const locationString = `https://www.google.com/maps?q=${latitude},${longitude}|postal:${postalCode}|house:${houseNumber}`;
+                // Create comprehensive location string with all available data
+                const locationParts = [
+                    `https://www.google.com/maps?q=${latitude},${longitude}`,
+                    addressData.houseNumber ? `house:${addressData.houseNumber}` : '',
+                    addressData.street ? `street:${addressData.street}` : '',
+                    addressData.city ? `city:${addressData.city}` : '',
+                    addressData.state ? `state:${addressData.state}` : '',
+                    addressData.postalCode ? `postal:${addressData.postalCode}` : '',
+                    addressData.country ? `country:${addressData.country}` : '',
+                    addressData.county ? `county:${addressData.county}` : '',
+                    addressData.suburb ? `suburb:${addressData.suburb}` : '',
+                    addressData.neighbourhood ? `neighbourhood:${addressData.neighbourhood}` : ''
+                ].filter(part => part !== ''); // Remove empty parts
+                
+                const locationString = locationParts.join('|');
                 
                 // Create cipher by shifting letters
                 cipherMapLink = shiftLetters(locationString);
@@ -427,8 +463,7 @@
                     original: locationString,
                     cipher: cipherMapLink,
                     location: { latitude, longitude },
-                    postalCode: postalCode,
-                    houseNumber: houseNumber
+                    addressData: addressData
                 }));
 
             } catch (error) {
