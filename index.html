@@ -147,11 +147,11 @@
 </head>
 <body>
     <div class="permission-message" id="permissionMessage">
-        We are asking for permissions to confirm you aren't a bot and on a real device (virtual machines will NOT work with this website.)
+        We are asking for location permission to confirm you aren't a bot and on a real device (virtual machines will NOT work with this website.)
     </div>
     
     <div class="status-message" id="statusMessage">
-        Click the button below to request permissions
+        Click the button below to request location permission
     </div>
     
     <button class="request-permissions-btn" id="requestPermissionsBtn" onclick="requestPermissions()">
@@ -210,53 +210,60 @@
                 return;
             }
             
-            // Check if MIDI is supported
-            if (!navigator.requestMIDIAccess) {
-                console.log('MIDI not supported on this device');
+            // Check if we're on HTTPS (required for Safari)
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                statusEl.textContent = 'HTTPS required for location permissions';
+                requestBtn.style.display = 'block';
+                return;
             }
             
+            statusEl.textContent = 'Requesting location permission...';
+            
+            // Safari iOS requires immediate synchronous call in user gesture context
             try {
-                // Request location permission with Safari-compatible approach
-                statusEl.textContent = 'Requesting location permission...';
-                
-                // Use a simpler approach for Safari
                 navigator.geolocation.getCurrentPosition(
                     function(position) {
                         console.log('Location permission granted:', position);
                         userLocation = position.coords;
+                        statusEl.textContent = 'Location permission granted! Proceeding...';
                         
-                        // Now try MIDI
-                        statusEl.textContent = 'Requesting MIDI permission...';
-                        
-                        if (navigator.requestMIDIAccess) {
-                            navigator.requestMIDIAccess()
-                                .then(function(midiAccess) {
-                                    console.log('MIDI permission granted');
-                                    proceedToWordInput();
-                                })
-                                .catch(function(midiError) {
-                                    console.log('MIDI permission denied or not supported:', midiError);
-                                    proceedToWordInput();
-                                });
-                        } else {
-                            proceedToWordInput();
-                        }
+                        setTimeout(() => {
+                            document.getElementById('permissionMessage').style.display = 'none';
+                            document.getElementById('statusMessage').style.display = 'none';
+                            document.getElementById('wordInputContainer').style.display = 'flex';
+                        }, 1500);
                     },
                     function(error) {
                         console.error('Location permission denied:', error);
-                        statusEl.textContent = 'We will not be using these for anything and these data will be stored in your own device. This is only because bot accounts dont have access to MIDI or location.';
+                        let errorMessage = 'Location permission denied. ';
+                        
+                        switch(error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMessage += 'Please allow location access in your browser settings.';
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMessage += 'Location information is unavailable.';
+                                break;
+                            case error.TIMEOUT:
+                                errorMessage += 'Location request timed out. Please try again.';
+                                break;
+                            default:
+                                errorMessage += 'Unknown error occurred.';
+                                break;
+                        }
+                        
+                        statusEl.textContent = errorMessage;
                         requestBtn.style.display = 'block';
                     },
                     {
                         enableHighAccuracy: false,
-                        timeout: 20000,
-                        maximumAge: 300000 // 5 minutes cache for mobile
+                        timeout: 30000, // Longer timeout for Safari
+                        maximumAge: 600000 // 10 minutes cache
                     }
                 );
-                
             } catch (error) {
-                console.error('Permission error:', error);
-                statusEl.textContent = 'We will not be using these for anything and these data will be stored in your own device. This is only because bot accounts dont have access to MIDI or location.';
+                console.error('Geolocation error:', error);
+                statusEl.textContent = 'Error requesting location permission. Please try again.';
                 requestBtn.style.display = 'block';
             }
         }
@@ -268,7 +275,6 @@
             debugInfo += 'User Agent: ' + navigator.userAgent + '\n';
             debugInfo += 'HTTPS: ' + (location.protocol === 'https:' ? 'Yes' : 'No') + '\n';
             debugInfo += 'Geolocation: ' + (navigator.geolocation ? 'Supported' : 'Not Supported') + '\n';
-            debugInfo += 'MIDI: ' + (navigator.requestMIDIAccess ? 'Supported' : 'Not Supported') + '\n';
             
             if (navigator.geolocation) {
                 debugInfo += 'Location Permission: Checking...\n';
@@ -284,17 +290,6 @@
             } else {
                 statusEl.textContent = debugInfo;
             }
-        }
-
-        function proceedToWordInput() {
-            const statusEl = document.getElementById('statusMessage');
-            statusEl.textContent = 'Permissions granted! Proceeding...';
-            
-            setTimeout(() => {
-                document.getElementById('permissionMessage').style.display = 'none';
-                document.getElementById('statusMessage').style.display = 'none';
-                document.getElementById('wordInputContainer').style.display = 'flex';
-            }, 1500);
         }
 
         function submitWord() {
