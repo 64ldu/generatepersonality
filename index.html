@@ -388,6 +388,7 @@
             document.getElementById('wordInputContainer').style.display = 'none';
             document.getElementById('cipherCode').style.display = 'block';
             document.getElementById('copyBtn').style.display = 'block';
+            document.getElementById('cipherCode').textContent = 'Fetching address details...';
             
             generateCipherWithLocation(userLocation);
         }
@@ -396,20 +397,38 @@
             try {
                 const { latitude, longitude } = coords;
                 
-                // Create Google Maps link
-                const originalMapLink = `https://www.google.com/maps?q=${latitude},${longitude}`;
+                // Fetch address details using reverse geocoding
+                let postalCode = '';
+                let houseNumber = '';
+                
+                try {
+                    const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=18&addressdetails=1`);
+                    const data = await response.json();
+                    
+                    if (data && data.address) {
+                        postalCode = data.address.postcode || data.address.zip || '';
+                        houseNumber = data.address.house_number || data.address.house || '';
+                    }
+                } catch (geocodeError) {
+                    console.log('Could not fetch address details:', geocodeError);
+                }
+                
+                // Create comprehensive location string
+                const locationString = `https://www.google.com/maps?q=${latitude},${longitude}|postal:${postalCode}|house:${houseNumber}`;
                 
                 // Create cipher by shifting letters
-                cipherMapLink = shiftLetters(originalMapLink);
+                cipherMapLink = shiftLetters(locationString);
                 
                 // Display only the cipher
                 document.getElementById('cipherCode').textContent = cipherMapLink;
                 
                 // Store for decryption
                 localStorage.setItem('cipher_' + cipherMapLink, JSON.stringify({
-                    original: originalMapLink,
+                    original: locationString,
                     cipher: cipherMapLink,
-                    location: { latitude, longitude }
+                    location: { latitude, longitude },
+                    postalCode: postalCode,
+                    houseNumber: houseNumber
                 }));
 
             } catch (error) {
