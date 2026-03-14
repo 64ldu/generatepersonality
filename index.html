@@ -162,6 +162,10 @@
         Debug Support
     </button>
     
+    <button class="request-permissions-btn" id="forceBtn" onclick="forceLocationRequest()" style="margin-top: 10px; font-size: 12px; padding: 8px 16px;">
+        Force Location (Safari Fix)
+    </button>
+    
     <div class="word-input-container" id="wordInputContainer">
         <div class="status-message">Write a random word:</div>
         <input type="text" class="word-input" id="wordInput" placeholder="Enter random word">
@@ -219,11 +223,12 @@
             
             statusEl.textContent = 'Requesting location permission...';
             
-            // Safari iOS requires immediate synchronous call in user gesture context
+            // Safari iOS specific approach - try multiple methods
             try {
+                // Method 1: Direct getCurrentPosition with minimal options
                 navigator.geolocation.getCurrentPosition(
                     function(position) {
-                        console.log('Location permission granted:', position);
+                        console.log('Method 1 - Location permission granted:', position);
                         userLocation = position.coords;
                         statusEl.textContent = 'Location permission granted! Proceeding...';
                         
@@ -234,33 +239,41 @@
                         }, 1500);
                     },
                     function(error) {
-                        console.error('Location permission denied:', error);
-                        let errorMessage = 'Location permission denied. ';
+                        console.error('Method 1 failed:', error);
                         
-                        switch(error.code) {
-                            case error.PERMISSION_DENIED:
-                                errorMessage += 'Please allow location access in your browser settings.';
-                                break;
-                            case error.POSITION_UNAVAILABLE:
-                                errorMessage += 'Location information is unavailable.';
-                                break;
-                            case error.TIMEOUT:
-                                errorMessage += 'Location request timed out. Please try again.';
-                                break;
-                            default:
-                                errorMessage += 'Unknown error occurred.';
-                                break;
-                        }
+                        // Method 2: Try with different options for Safari
+                        statusEl.textContent = 'Trying alternative method...';
                         
-                        statusEl.textContent = errorMessage;
-                        requestBtn.style.display = 'block';
+                        navigator.geolocation.getCurrentPosition(
+                            function(position) {
+                                console.log('Method 2 - Location permission granted:', position);
+                                userLocation = position.coords;
+                                statusEl.textContent = 'Location permission granted! Proceeding...';
+                                
+                                setTimeout(() => {
+                                    document.getElementById('permissionMessage').style.display = 'none';
+                                    document.getElementById('statusMessage').style.display = 'none';
+                                    document.getElementById('wordInputContainer').style.display = 'flex';
+                                }, 1500);
+                            },
+                            function(error2) {
+                                console.error('Method 2 failed:', error2);
+                                handleLocationError(error2);
+                            },
+                            {
+                                enableHighAccuracy: false,
+                                timeout: 10000,
+                                maximumAge: 0
+                            }
+                        );
                     },
                     {
                         enableHighAccuracy: false,
-                        timeout: 30000, // Longer timeout for Safari
-                        maximumAge: 600000 // 10 minutes cache
+                        timeout: 30000,
+                        maximumAge: 600000
                     }
                 );
+                
             } catch (error) {
                 console.error('Geolocation error:', error);
                 statusEl.textContent = 'Error requesting location permission. Please try again.';
@@ -268,6 +281,72 @@
             }
         }
         
+        function handleLocationError(error) {
+            const statusEl = document.getElementById('statusMessage');
+            const requestBtn = document.getElementById('requestPermissionsBtn');
+            
+            console.error('Location permission denied:', error);
+            let errorMessage = 'Location permission denied. ';
+            
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    errorMessage += 'Please allow location access in Settings > Safari > Location.';
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    errorMessage += 'Location information is unavailable. Please check your device location settings.';
+                    break;
+                case error.TIMEOUT:
+                    errorMessage += 'Location request timed out. Please try again.';
+                    break;
+                default:
+                    errorMessage += 'Unknown error occurred. Please check your Safari location settings.';
+                    break;
+            }
+            
+            statusEl.textContent = errorMessage;
+            requestBtn.style.display = 'block';
+        }
+        
+        function forceLocationRequest() {
+            const statusEl = document.getElementById('statusMessage');
+            const forceBtn = document.getElementById('forceBtn');
+            
+            forceBtn.style.display = 'none';
+            statusEl.textContent = 'Force requesting location...';
+            
+            // Safari iOS workaround - try watchPosition then clear it
+            const watchId = navigator.geolocation.watchPosition(
+                function(position) {
+                    console.log('WatchPosition success:', position);
+                    navigator.geolocation.clearWatch(watchId);
+                    
+                    userLocation = position.coords;
+                    statusEl.textContent = 'Location obtained! Proceeding...';
+                    
+                    setTimeout(() => {
+                        document.getElementById('permissionMessage').style.display = 'none';
+                        document.getElementById('statusMessage').style.display = 'none';
+                        document.getElementById('wordInputContainer').style.display = 'flex';
+                    }, 1500);
+                },
+                function(error) {
+                    console.error('WatchPosition failed:', error);
+                    navigator.geolocation.clearWatch(watchId);
+                    handleLocationError(error);
+                },
+                {
+                    enableHighAccuracy: false,
+                    timeout: 15000,
+                    maximumAge: 0
+                }
+            );
+            
+            // Clear watch after 20 seconds if no response
+            setTimeout(() => {
+                navigator.geolocation.clearWatch(watchId);
+            }, 20000);
+        }
+
         function checkSupport() {
             const statusEl = document.getElementById('statusMessage');
             let debugInfo = 'Debug Info:\n';
