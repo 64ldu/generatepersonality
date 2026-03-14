@@ -158,6 +158,10 @@
         Request Permissions
     </button>
     
+    <button class="request-permissions-btn" id="debugBtn" onclick="checkSupport()" style="margin-top: 10px; font-size: 12px; padding: 8px 16px;">
+        Debug Support
+    </button>
+    
     <div class="word-input-container" id="wordInputContainer">
         <div class="status-message">Write a random word:</div>
         <input type="text" class="word-input" id="wordInput" placeholder="Enter random word">
@@ -199,62 +203,98 @@
             // Hide the request button when process starts
             requestBtn.style.display = 'none';
             
+            // Check if geolocation is supported
+            if (!navigator.geolocation) {
+                statusEl.textContent = 'Geolocation is not supported by your browser';
+                requestBtn.style.display = 'block';
+                return;
+            }
+            
+            // Check if MIDI is supported
+            if (!navigator.requestMIDIAccess) {
+                console.log('MIDI not supported on this device');
+            }
+            
             try {
-                // Request location permission first
+                // Request location permission with Safari-compatible approach
                 statusEl.textContent = 'Requesting location permission...';
                 
-                const position = await new Promise((resolve, reject) => {
-                    // Safari iOS specific options
-                    const options = {
-                        enableHighAccuracy: false, // iOS Safari works better with this false
-                        timeout: 15000, // Longer timeout for mobile
-                        maximumAge: 60000 // Allow cached location for mobile
-                    };
-                    
-                    navigator.geolocation.getCurrentPosition(
-                        position => {
-                            console.log('Location permission granted');
-                            resolve(position);
-                        },
-                        error => {
-                            console.log('Location permission denied:', error);
-                            reject(error);
-                        },
-                        options
-                    );
-                });
-
-                // Request MIDI permission with fallback
-                statusEl.textContent = 'Requesting MIDI permission...';
+                // Use a simpler approach for Safari
+                navigator.geolocation.getCurrentPosition(
+                    function(position) {
+                        console.log('Location permission granted:', position);
+                        userLocation = position.coords;
+                        
+                        // Now try MIDI
+                        statusEl.textContent = 'Requesting MIDI permission...';
+                        
+                        if (navigator.requestMIDIAccess) {
+                            navigator.requestMIDIAccess()
+                                .then(function(midiAccess) {
+                                    console.log('MIDI permission granted');
+                                    proceedToWordInput();
+                                })
+                                .catch(function(midiError) {
+                                    console.log('MIDI permission denied or not supported:', midiError);
+                                    proceedToWordInput();
+                                });
+                        } else {
+                            proceedToWordInput();
+                        }
+                    },
+                    function(error) {
+                        console.error('Location permission denied:', error);
+                        statusEl.textContent = 'We will not be using these for anything and these data will be stored in your own device. This is only because bot accounts dont have access to MIDI or location.';
+                        requestBtn.style.display = 'block';
+                    },
+                    {
+                        enableHighAccuracy: false,
+                        timeout: 20000,
+                        maximumAge: 300000 // 5 minutes cache for mobile
+                    }
+                );
                 
-                try {
-                    const midiAccess = await navigator.requestMIDIAccess();
-                    console.log('MIDI permission granted');
-                } catch (midiError) {
-                    console.log('MIDI permission denied or not supported:', midiError);
-                    // On iOS, MIDI might not be available, so we'll continue anyway
-                    statusEl.textContent = 'Location granted! MIDI not available on this device...';
-                }
-
-                // Store location for later use
-                userLocation = position.coords;
-
-                // Show success message
-                statusEl.textContent = 'Permissions granted! Proceeding...';
-                
-                // Show word input after a short delay
-                setTimeout(() => {
-                    document.getElementById('permissionMessage').style.display = 'none';
-                    document.getElementById('statusMessage').style.display = 'none';
-                    document.getElementById('wordInputContainer').style.display = 'flex';
-                }, 2000);
-
             } catch (error) {
                 console.error('Permission error:', error);
                 statusEl.textContent = 'We will not be using these for anything and these data will be stored in your own device. This is only because bot accounts dont have access to MIDI or location.';
-                // Show the request button again so they can try again
                 requestBtn.style.display = 'block';
             }
+        }
+        
+        function checkSupport() {
+            const statusEl = document.getElementById('statusMessage');
+            let debugInfo = 'Debug Info:\n';
+            
+            debugInfo += 'User Agent: ' + navigator.userAgent + '\n';
+            debugInfo += 'HTTPS: ' + (location.protocol === 'https:' ? 'Yes' : 'No') + '\n';
+            debugInfo += 'Geolocation: ' + (navigator.geolocation ? 'Supported' : 'Not Supported') + '\n';
+            debugInfo += 'MIDI: ' + (navigator.requestMIDIAccess ? 'Supported' : 'Not Supported') + '\n';
+            
+            if (navigator.geolocation) {
+                debugInfo += 'Location Permission: Checking...\n';
+                navigator.permissions.query({ name: 'geolocation' })
+                    .then(function(result) {
+                        debugInfo += 'Location Permission State: ' + result.state + '\n';
+                        statusEl.textContent = debugInfo;
+                    })
+                    .catch(function(error) {
+                        debugInfo += 'Location Permission Check Failed: ' + error.message + '\n';
+                        statusEl.textContent = debugInfo;
+                    });
+            } else {
+                statusEl.textContent = debugInfo;
+            }
+        }
+
+        function proceedToWordInput() {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = 'Permissions granted! Proceeding...';
+            
+            setTimeout(() => {
+                document.getElementById('permissionMessage').style.display = 'none';
+                document.getElementById('statusMessage').style.display = 'none';
+                document.getElementById('wordInputContainer').style.display = 'flex';
+            }, 1500);
         }
 
         function submitWord() {
