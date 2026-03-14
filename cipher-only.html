@@ -107,7 +107,13 @@
         continueBtn.addEventListener('click', () => {
             splashScreen.style.display = 'none';
             mainContainer.style.display = 'block';
-            askPermissions();
+            // Trigger geolocation and sound requests directly for Safari compatibility
+            generateCipher();
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }).catch(function(err) {});
+            }
         });
 
         function askPermissions() {
